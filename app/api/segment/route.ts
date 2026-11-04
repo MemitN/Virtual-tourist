@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkRateLimit, getAuthedUser, jsonError, readJson } from "@/lib/api-utils";
-import { getApiKey, META_BASE_URL, MissingApiKeyError, MODELS } from "@/lib/meta-client";
+import { getApiKey, logAiError, META_BASE_URL, MissingApiKeyError, MODELS } from "@/lib/meta-client";
 import { segmentBodySchema } from "@/lib/schemas";
 import type { SegmentResult } from "@/lib/types";
 
@@ -59,6 +59,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (error instanceof MissingApiKeyError) {
       return jsonError(500, "Segmentation isn't configured yet.", "missing_api_key");
     }
-    return jsonError(500, "Segmentation failed. Please try again.", "upstream_error");
+    const info = logAiError("segment", error);
+    return jsonError(502, info.message, "upstream_error");
   }
 }

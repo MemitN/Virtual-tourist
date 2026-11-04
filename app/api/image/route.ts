@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { checkRateLimit, getAuthedUser, jsonError, readJson } from "@/lib/api-utils";
-import { generateImage, MissingApiKeyError } from "@/lib/meta-client";
+import { generateImage, logAiError, MissingApiKeyError } from "@/lib/meta-client";
 import { buildPanoramaPrompt } from "@/lib/prompts";
 import { imageBodySchema } from "@/lib/schemas";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const BUCKET = "panoramas";
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 
 function extensionFor(contentType: string): string {
   if (contentType.includes("jpeg") || contentType.includes("jpg")) return "jpg";
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       contentType = download.headers.get("content-type") ?? contentType;
       bytes = Buffer.from(await download.arrayBuffer());
     }
+    if (bytes.length > MAX_IMAGE_BYTES) throw new Error("Generated image is too large");
 
     const storage = createServiceClient();
     if (!storage) {
@@ -82,13 +84,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const { data } = storage.storage.from(BUCKET).getPublicUrl(path);
     return NextResponse.json({ url: data.publicUrl });
   } catch (error) {
-    if (error instanceof MissingApiKeyError) {
-      return jsonError(500, "Image generation isn't configured yet.", "missing_api_key");
-    }
-    return jsonError(
-      500,
-      "Couldn't generate the panorama right now. Please try again.",
-      "upstream_error",
-    );
+    // Never leave the viewer with an error: fall back to the place's own photo and say why.
+    const info = error instanceof MissingApiKeyError ? null : logAiError("image", error);
+    const reason = info
+      ? `AI image generation failed (${info.status ?? "network"}), so you're seeing the standard view.`
+      : "Image generation isn't configured, so you're seeing the standard view.";
+    return NextResponse.json({ url: destination.heroImage, placeholder: true, reason });
   }
 }

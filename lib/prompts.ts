@@ -1,8 +1,13 @@
 import { getDayPart } from "@/lib/weather";
-import type { Destination, LiveContext } from "@/lib/types";
+import { languageByCode, type LanguageCode } from "@/lib/languages";
+import type { Destination, LiveContext, PointOfInterest } from "@/lib/types";
 
 /** System prompt that turns muse-spark-1.3 into a local expert for one destination. */
-export function buildGuidePrompt(destination: Destination, liveContext: LiveContext): string {
+export function buildGuidePrompt(
+  destination: Destination,
+  liveContext: LiveContext,
+  language: LanguageCode = "en",
+): string {
   const { guide } = destination;
 
   const weatherKnown = liveContext.conditions !== "Unknown";
@@ -31,9 +36,16 @@ You may know more than this about the place, but be especially careful with spec
 - Language: ${destination.language}
 - Time zone: ${destination.timezone}`;
 
+  const languageBlock =
+    language === "en"
+      ? "LANGUAGE: Reply in the language the traveler writes in."
+      : `LANGUAGE: The traveler chose ${languageByCode(language).label}. Reply in ${languageByCode(language).label} unless they clearly write to you in another language, then match that language. Keep place names recognisable.`;
+
   return `You are ${guide.name}, a warm, well-travelled local expert who knows ${destination.name}, ${destination.country} inside out. You are chatting with a traveler who is exploring ${destination.name} virtually inside an AI tourism app. Speak as ${guide.name}: friendly, curious, a little playful, never robotic. You may open with a brief local-language greeting such as "${guide.greeting}" in your first reply only.
 
 ${aboutBlock}
+
+${languageBlock}
 
 ${contextBlock}
 Weave the time of day and weather into your answers naturally when relevant (for example, suggesting an evening stroll when it is evening, or a cozy café if it is raining). Never recite the context block like a report.
@@ -57,4 +69,24 @@ HONESTY AND SAFETY
 /** Prompt for muse-image-1.0 panoramas; the equirectangular wording matters for the 360° viewer. */
 export function buildPanoramaPrompt(destination: Destination, userPrompt: string): string {
   return `Seamless equirectangular 360-degree panorama, photorealistic, wide-angle, no people in focus, no text or watermarks. Location: ${destination.name}, ${destination.country}. Scene: ${userPrompt}`;
+}
+
+/** One self-contained explanation of a place (or a landmark in it), in the traveler's language. */
+export function buildExplainMessages(
+  destination: Destination,
+  poi: PointOfInterest | null,
+  language: LanguageCode,
+): { system: string; user: string } {
+  const lang = languageByCode(language).label;
+  const subject = poi ? `${poi.label} in ${destination.name}, ${destination.country}` : `${destination.name}, ${destination.country}`;
+  const facts = poi ? poi.description : destination.description;
+  return {
+    system: `You are ${destination.guide.name}, a friendly local guide who explains places clearly and honestly. Write in ${lang}. Be vivid but factual: if you are not sure about a date, number or name, leave it out or say you are not certain. Never invent facts. No headings, no markdown symbols, no questions. Respect local culture and avoid political controversy.`,
+    user: `Explain ${subject} to a curious first-time visitor in about 130 words, in ${lang}, as 2 or 3 short paragraphs: what it is and why it matters, what you notice when you are there (sights, sounds, smells), and one respectful local tip.\n\nBackground you can rely on: ${facts}`,
+  };
+}
+
+export function buildTranslateSystemPrompt(language: LanguageCode): string {
+  const lang = languageByCode(language).label;
+  return `You are a precise translator. Translate the user's message into ${lang}. Keep proper nouns, line breaks and any bullet lists. Do not add notes, explanations or quotation marks. Output only the translation.`;
 }

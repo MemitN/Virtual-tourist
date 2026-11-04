@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import type { LanguageCode } from "@/lib/languages";
 
 interface UiState {
   authDialogOpen: boolean;
@@ -12,6 +13,9 @@ interface UiState {
   /** Ambient audio is muted by default and the choice is persisted. */
   ambientMuted: boolean;
   setAmbientMuted: (muted: boolean) => void;
+  /** Language for translations, guide replies and read-aloud. */
+  language: LanguageCode;
+  setLanguage: (language: LanguageCode) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -23,11 +27,13 @@ export const useUiStore = create<UiState>()(
       closeAuthDialog: () => set({ authDialogOpen: false }),
       ambientMuted: true,
       setAmbientMuted: (ambientMuted) => set({ ambientMuted }),
+      language: "en",
+      setLanguage: (language) => set({ language }),
     }),
     {
       name: "avt:ui",
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ ambientMuted: state.ambientMuted }),
+      partialize: (state) => ({ ambientMuted: state.ambientMuted, language: state.language }),
     },
   ),
 );

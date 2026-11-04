@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { LANGUAGE_CODES } from "@/lib/languages";
 import { isValidSlug } from "@/lib/place-slug";
+import { itinerarySchema, tripOptionsSchema } from "@/lib/trip";
 
 export const slugSchema = z
   .string()
@@ -14,8 +16,11 @@ const chatMessageSchema = z.object({
   content: z.string().trim().min(1, "Message is empty").max(4000, "Message is too long"),
 });
 
+export const languageSchema = z.enum(LANGUAGE_CODES);
+
 export const chatBodySchema = z.object({
   slug: slugSchema,
+  language: languageSchema.optional(),
   messages: z
     .array(chatMessageSchema)
     .min(1)
@@ -31,7 +36,11 @@ export const imageBodySchema = z.object({
 });
 
 export const segmentBodySchema = z.object({
-  imageUrl: z.string().url().max(2048),
+  imageUrl: z
+    .string()
+    .url()
+    .max(2048)
+    .refine((value) => value.startsWith("https://"), "Image URL must use https"),
   textPrompt: z.string().trim().min(1).max(200),
 });
 
@@ -55,3 +64,24 @@ export type FavoriteCreateBody = z.infer<typeof favoriteCreateSchema>;
 export const placeSearchSchema = z.object({
   q: z.string().trim().min(2, "Type at least 2 characters").max(80),
 });
+
+export const translateBodySchema = z.object({
+  text: z.string().trim().min(1).max(4000),
+  language: languageSchema,
+});
+
+export const explainBodySchema = z.object({
+  slug: slugSchema,
+  poiId: z.string().max(80).regex(/^[a-z0-9-]+$/).optional(),
+  language: languageSchema,
+});
+
+export const tripCreateSchema = z.object({
+  slug: slugSchema,
+  title: z.string().trim().min(1).max(200),
+  language: z.string().trim().min(2).max(8).default("en"),
+  options: tripOptionsSchema.optional(),
+  data: itinerarySchema,
+});
+
+export type TripCreateBody = z.infer<typeof tripCreateSchema>;

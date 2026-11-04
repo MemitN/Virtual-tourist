@@ -1,5 +1,5 @@
 -- 0001_init.sql
--- AI Virtual Tourism: profiles, favorites, chat history, storage bucket.
+-- Virtual Tourist: profiles, favorites, chat history, storage bucket.
 -- RLS is enabled on every table. Safe to re-run (idempotent where practical).
 
 -- ---------------------------------------------------------------------------

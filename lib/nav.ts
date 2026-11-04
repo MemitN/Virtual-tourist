@@ -1,4 +1,4 @@
-import { Compass, Heart, Home, type LucideIcon } from "lucide-react";
+import { CalendarDays, Compass, Heart, Home, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -17,4 +17,5 @@ export const NAV_ITEMS: readonly NavItem[] = [
     match: (p) => p.startsWith("/explore") || p.startsWith("/destination"),
   },
   { href: "/favorites", label: "Favorites", icon: Heart, match: (p) => p.startsWith("/favorites") },
+  { href: "/trips", label: "Trips", icon: CalendarDays, match: (p) => p.startsWith("/trips") },
 ];

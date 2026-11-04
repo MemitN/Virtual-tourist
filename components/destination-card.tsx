@@ -36,7 +36,7 @@ export function DestinationCard({
           className="transition-transform duration-700 group-hover:scale-105"
         />
         <div
-          className="absolute inset-0 bg-gradient-to-t from-[#050816] via-[#050816]/30 to-transparent"
+          className="absolute inset-0 bg-gradient-to-t from-ink via-ink/30 to-transparent"
           aria-hidden="true"
         />
 

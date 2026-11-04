@@ -17,10 +17,12 @@ import {
   X,
 } from "lucide-react";
 import { AmbientAudio } from "@/components/ambient-audio";
+import { ExplainPanel } from "@/components/explain-panel";
 import { LiveFeedToggle, type LiveFeedStatus } from "@/components/live-feed-toggle";
 import { PanoramaViewer, type PanoramaFocus } from "@/components/panorama-viewer";
 import { RoomPresence } from "@/components/room-presence";
 import { ShareButton } from "@/components/share-button";
+import { TranslatedText } from "@/components/translated-text";
 import { Button } from "@/components/ui/button";
 import {
   connectLiveFeed,
@@ -37,6 +39,7 @@ import { cn } from "@/lib/utils";
 const imageResponseSchema = z.object({
   url: z.string().url(),
   placeholder: z.boolean().optional(),
+  reason: z.string().optional(),
 });
 const apiErrorSchema = z.object({ error: z.string() });
 
@@ -117,7 +120,7 @@ export function TourExperience({ destination, initialPoiId = null }: TourExperie
           return;
         }
         if (parsed.data.placeholder) {
-          toast("AI image generation is switched off here, so you're seeing the demo view.");
+          toast(parsed.data.reason ?? "AI image generation is switched off here, so you're seeing the demo view.");
         } else {
           imageCache.current.set(mood.id, parsed.data.url);
         }
@@ -239,7 +242,7 @@ export function TourExperience({ destination, initialPoiId = null }: TourExperie
           animate={{ opacity: 1, y: 0 }}
           exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
           transition={{ duration: 0.2 }}
-          className="absolute inset-x-3 bottom-3 z-20 rounded-2xl border border-white/15 bg-black/75 p-4 text-white shadow-lg backdrop-blur-xl sm:inset-x-auto sm:left-4 sm:max-w-sm"
+          className="absolute inset-x-3 bottom-3 z-20 max-h-[65%] overflow-y-auto rounded-2xl border border-white/15 bg-black/75 p-4 text-white shadow-lg backdrop-blur-xl sm:inset-x-auto sm:left-4 sm:max-w-sm"
         >
           <div className="flex items-start justify-between gap-3">
             <h2 className="font-display text-lg font-semibold">{activePoi.label}</h2>
@@ -252,7 +255,16 @@ export function TourExperience({ destination, initialPoiId = null }: TourExperie
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
-          <p className="mt-1 text-sm text-white/85">{activePoi.description}</p>
+          <TranslatedText text={activePoi.description} className="mt-1 block text-sm text-white/85" />
+          <ExplainPanel
+            key={activePoi.id}
+            slug={slug}
+            poiId={activePoi.id}
+            subject={activePoi.label}
+            guideName={destination.guide.name}
+            tone="dark"
+            className="mt-3"
+          />
           <Button asChild size="sm" variant="glass" className="mt-3">
             <Link
               href={`/destination/${slug}/guide?q=${encodeURIComponent(

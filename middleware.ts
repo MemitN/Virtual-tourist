@@ -8,7 +8,8 @@ interface CookieToSet {
 }
 
 /** Pages that need a signed-in user. Home, destination and tour pages stay public. */
-const PROTECTED_PREFIXES = ["/favorites"];
+// Favorites work for guests too (kept in the browser), so nothing is protected by default.
+const PROTECTED_PREFIXES: string[] = [];
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   let response = NextResponse.next({ request });

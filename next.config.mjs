@@ -11,6 +11,7 @@ const supabaseHost = (() => {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  poweredByHeader: false,
   transpilePackages: ["three"],
   images: {
     formats: ["image/avif", "image/webp"],
@@ -18,6 +19,8 @@ const nextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "images.pexels.com" },
       { protocol: "https", hostname: "upload.wikimedia.org" },
+      { protocol: "https", hostname: "thumb.wikimedia.org" },
+      { protocol: "https", hostname: "**.wikimedia.org" },
       { protocol: "https", hostname: "images.weserv.nl" },
       ...(supabaseHost
         ? [{ protocol: "https", hostname: supabaseHost }]
@@ -32,9 +35,11 @@ const nextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            value: "camera=(), microphone=(self), geolocation=()",
           },
         ],
       },

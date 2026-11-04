@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import { Heart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useFavoritesStore } from "@/lib/favorites-store";
-import { useUiStore } from "@/lib/store";
+import { GUEST_ID, useFavoritesStore } from "@/lib/favorites-store";
 import { useUser } from "@/lib/useUser";
 import { cn } from "@/lib/utils";
 
@@ -28,31 +26,23 @@ export function FavoriteButton({
   tone = "default",
   className,
 }: FavoriteButtonProps) {
-  const pathname = usePathname();
   const reduceMotion = useReducedMotion();
   const { user, loading: userLoading } = useUser();
   const userId = user?.id ?? null;
-  const openAuthDialog = useUiStore((s) => s.openAuthDialog);
 
   const isFavorite = useFavoritesStore((s) => Boolean(s.ids[slug]));
   const busy = useFavoritesStore((s) => Boolean(s.pending[slug]));
   const status = useFavoritesStore((s) => s.status);
   const load = useFavoritesStore((s) => s.load);
-  const reset = useFavoritesStore((s) => s.reset);
   const toggle = useFavoritesStore((s) => s.toggle);
 
   // Many buttons can be mounted at once; the store de-duplicates the fetch.
   useEffect(() => {
     if (userLoading) return;
-    if (userId) void load(userId);
-    else reset();
-  }, [userId, userLoading, load, reset]);
+    void load(userId ?? GUEST_ID);
+  }, [userId, userLoading, load]);
 
   const handleClick = async (): Promise<void> => {
-    if (!userId) {
-      openAuthDialog(pathname);
-      return;
-    }
     const wasFavorite = isFavorite;
     const result = await toggle(slug);
 

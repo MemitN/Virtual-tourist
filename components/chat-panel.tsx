@@ -13,12 +13,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { z } from "zod";
 import { toast } from "sonner";
+import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import {
   AlertCircle,
   Check,
   ChevronLeft,
   Copy,
+  Languages,
   LogIn,
+  Trash2,
   Pause,
   Play,
   RefreshCw,
@@ -33,6 +36,9 @@ import { RoomPresence } from "@/components/room-presence";
 import { Button } from "@/components/ui/button";
 import { VoiceInputButton } from "@/components/voice-input-button";
 import { WeatherCard } from "@/components/weather-card";
+import { fetchTranslation } from "@/lib/ai-client";
+import type { LanguageCode } from "@/lib/languages";
+import { useLanguage } from "@/lib/useLanguage";
 import { useRoom } from "@/lib/realtime/useRoom";
 import {
   pauseSpeech,
@@ -105,6 +111,32 @@ async function loadHistory(userId: string, slug: string): Promise<UiChatMessage[
   return rows.data.reverse();
 }
 
+const LOCAL_KEY = (slug: string): string => `vt:chat:${slug}`;
+
+function loadLocalHistory(slug: string): UiChatMessage[] {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_KEY(slug));
+    if (!raw) return [];
+    const rows = z.array(historyRowSchema).safeParse(JSON.parse(raw));
+    return rows.success ? rows.data.slice(-HISTORY_LIMIT) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalHistory(slug: string, messages: UiChatMessage[]): void {
+  try {
+    const keep = messages
+      .filter((m) => !m.failed && !m.streaming && m.content.trim())
+      .slice(-HISTORY_LIMIT)
+      .map(({ id, role, content }) => ({ id, role, content }));
+    if (keep.length === 0) window.localStorage.removeItem(LOCAL_KEY(slug));
+    else window.localStorage.setItem(LOCAL_KEY(slug), JSON.stringify(keep));
+  } catch {
+    /* storage full or blocked: history is a nicety */
+  }
+}
+
 type HistoryStatus = "idle" | "loading" | "ready" | "error";
 
 interface ChatPanelProps {
@@ -116,10 +148,11 @@ interface ChatPanelProps {
 export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProps) {
   const { slug, name, starterQuestions, pois, guide } = destination;
   const pathname = usePathname();
-  const { user, loading: userLoading } = useUser();
+  const { user, loading: userLoading, configured: authConfigured } = useUser();
   const userId = user?.id ?? null;
   const openAuthDialog = useUiStore((s) => s.openAuthDialog);
   const room = useRoom(slug);
+  const { language, info: languageInfo } = useLanguage();
 
   const [messages, setMessages] = useState<UiChatMessage[]>([]);
   const [historyStatus, setHistoryStatus] = useState<HistoryStatus>("idle");
@@ -157,7 +190,8 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
   useEffect(() => {
     if (userLoading) return;
     if (!userId) {
-      setMessages([]);
+      // Guests keep their conversation in this browser.
+      setMessages(loadLocalHistory(slug));
       setHistoryStatus("ready");
       return;
     }
@@ -177,6 +211,30 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
       cancelled = true;
     };
   }, [userId, userLoading, slug, historyAttempt]);
+
+  const clearConversation = useCallback(async (): Promise<void> => {
+    if (!window.confirm("Clear this conversation? This can't be undone.")) return;
+    try {
+      if (userId) {
+        // RLS only lets people delete their own sessions; messages go with them (cascade).
+        const supabase = createBrowserSupabase();
+        const { error } = await supabase!.from("chat_sessions").delete().eq("user_id", userId).eq("destination_slug", slug);
+        if (error) throw error;
+      } else {
+        window.localStorage.removeItem(LOCAL_KEY(slug));
+      }
+      setMessages([]);
+      toast("Conversation cleared");
+    } catch {
+      toast.error("Couldn't clear the conversation. Please try again.");
+    }
+  }, [userId, slug]);
+
+  // Persist guest conversations locally once a reply has finished.
+  useEffect(() => {
+    if (userLoading || userId || streaming || historyStatus !== "ready") return;
+    saveLocalHistory(slug, messages);
+  }, [messages, streaming, userId, userLoading, slug, historyStatus]);
 
   // Keep the newest text in view unless the reader scrolled up.
   useEffect(() => {
@@ -214,7 +272,7 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ slug, messages: payload }),
+          body: JSON.stringify({ slug, messages: payload, language }),
           signal: controller.signal,
         });
 
@@ -267,18 +325,13 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
         setStreaming(false);
       }
     },
-    [slug, openAuthDialog, returnPath],
+    [slug, language, openAuthDialog, returnPath],
   );
 
   const send = useCallback(
     async (raw: string): Promise<void> => {
       const text = raw.trim();
       if (!text || streamingRef.current) return;
-      if (!userId) {
-        toast("Sign in to chat with your local guide.");
-        openAuthDialog(returnPath());
-        return;
-      }
       setInput("");
       stickRef.current = true;
       const userMessage: UiChatMessage = {
@@ -288,7 +341,7 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
       };
       await streamReply([...messagesRef.current.filter((m) => !m.failed), userMessage]);
     },
-    [userId, openAuthDialog, returnPath, streamReply],
+    [streamReply],
   );
 
   const retry = useCallback((): void => {
@@ -302,11 +355,11 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
   // Deep link from a starter question or POI: send once when signed in and history is ready.
   useEffect(() => {
     if (!initialQuestion || autoSentRef.current) return;
-    if (userLoading || !userId || historyStatus === "idle" || historyStatus === "loading") return;
+    if (userLoading || historyStatus === "idle" || historyStatus === "loading") return;
     autoSentRef.current = true;
     window.history.replaceState(null, "", window.location.pathname);
     void send(initialQuestion);
-  }, [initialQuestion, userLoading, userId, historyStatus, send]);
+  }, [initialQuestion, userLoading, historyStatus, send]);
 
   const toggleSpeech = useCallback(
     (id: string, text: string): void => {
@@ -325,10 +378,10 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
             return { id, state };
           }),
         onError: () => toast.error("Read-aloud stopped unexpectedly."),
-      });
+      }, languageInfo.speech);
       if (!result.ok) toast(result.message ?? SPEECH_UNSUPPORTED_MESSAGE);
     },
-    [speech],
+    [speech, languageInfo.speech],
   );
 
   const handleDictationStart = useCallback((): void => {
@@ -412,7 +465,15 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
               </p>
             </div>
           </div>
-          <RoomPresence room={room} pois={pois} className="lg:hidden" />
+          <div className="flex items-center gap-2">
+            {messages.length > 0 && !streaming && (
+              <Button type="button" size="sm" variant="ghost" onClick={() => void clearConversation()} aria-label="Clear conversation">
+                <Trash2 aria-hidden="true" />
+                <span className="hidden sm:inline">Clear</span>
+              </Button>
+            )}
+            <RoomPresence room={room} pois={pois} className="lg:hidden" />
+          </div>
         </header>
 
         <div
@@ -452,9 +513,9 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
             </div>
           )}
 
-          {!userLoading && !userId && (
+          {!userLoading && !userId && authConfigured && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/10 p-3 text-sm">
-              <span>Sign in to chat with {guide.name} and keep your conversation history.</span>
+              <span>Chatting as a guest. Sign in to keep your conversation across devices.</span>
               <Button size="sm" onClick={() => openAuthDialog(returnPath())}>
                 <LogIn aria-hidden="true" />
                 Sign in
@@ -497,6 +558,8 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
               key={message.id}
               message={message}
               guide={guide}
+              language={language}
+              languageLabel={languageInfo.label}
               speechState={speech?.id === message.id ? speech.state : "idle"}
               onToggleSpeech={toggleSpeech}
               onStopSpeech={stopSpeech}
@@ -551,10 +614,11 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
               onKeyDown={handleKeyDown}
               rows={1}
               maxLength={MAX_CONTENT}
-              placeholder={userId ? `Ask ${guide.name} about ${name}…` : "Sign in to start chatting"}
+              placeholder={`Ask ${guide.name} about ${name}…`}
               className="max-h-36 min-h-11 flex-1 resize-none rounded-2xl border bg-card px-4 py-2.5 text-base placeholder:text-muted-foreground focus-visible:outline-none sm:text-sm"
             />
             <VoiceInputButton
+              lang={languageInfo.speech}
               onStart={handleDictationStart}
               onTranscript={handleDictation}
               disabled={streaming}
@@ -618,6 +682,8 @@ export function ChatPanel({ destination, initialQuestion = null }: ChatPanelProp
 interface MessageBubbleProps {
   message: UiChatMessage;
   guide: GuideProfile;
+  language: LanguageCode;
+  languageLabel: string;
   speechState: SpeechState;
   onToggleSpeech: (id: string, text: string) => void;
   onStopSpeech: () => void;
@@ -627,11 +693,42 @@ interface MessageBubbleProps {
 const MessageBubble = memo(function MessageBubble({
   message,
   guide,
+  language,
+  languageLabel,
   speechState,
   onToggleSpeech,
   onStopSpeech,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [showTranslation, setShowTranslation] = useState(true);
+  const [translating, setTranslating] = useState(false);
+
+  // A different target language makes the old translation stale.
+  useEffect(() => setTranslation(null), [language]);
+
+  const translate = async (): Promise<void> => {
+    if (translation) {
+      setShowTranslation((v) => !v);
+      return;
+    }
+    setTranslating(true);
+    try {
+      const result = await fetchTranslation(message.content, language);
+      if (result.demo) {
+        toast("Translation needs the AI model. Add MODEL_API_KEY to turn it on.");
+      } else {
+        setTranslation(result.text);
+        setShowTranslation(true);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't translate that reply.");
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  const displayText = translation && showTranslation ? translation : message.content;
   const copyReply = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(message.content);
@@ -676,7 +773,7 @@ const MessageBubble = memo(function MessageBubble({
               <span className="typing-dot" style={{ animationDelay: "300ms" }} aria-hidden="true" />
             </span>
           ) : (
-            <RichText text={message.content} />
+            <RichText text={displayText} />
           )}
           {message.failed && message.content && (
             <p className="mt-2 text-xs text-muted-foreground">This reply was interrupted.</p>
@@ -687,7 +784,7 @@ const MessageBubble = memo(function MessageBubble({
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => onToggleSpeech(message.id, message.content)}
+              onClick={() => onToggleSpeech(message.id, displayText)}
               aria-label={
                 speechState === "speaking"
                   ? "Pause reading aloud"
@@ -718,6 +815,18 @@ const MessageBubble = memo(function MessageBubble({
                 <Copy className="h-4 w-4" aria-hidden="true" />
               )}
               {copied ? "Copied" : "Copy"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void translate()}
+              disabled={translating}
+              aria-label={
+                translation && showTranslation ? "Show the original reply" : `Translate this reply to ${languageLabel}`
+              }
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-60"
+            >
+              <Languages className={cn("h-4 w-4", translating && "animate-pulse")} aria-hidden="true" />
+              {translating ? "Translating…" : translation && showTranslation ? "Original" : languageLabel}
             </button>
             {speaking && (
               <button

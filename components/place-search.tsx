@@ -35,13 +35,15 @@ interface PlaceSearchProps {
   autoFocus?: boolean;
   /** Called after navigating (e.g. to close a dialog). */
   onNavigate?: () => void;
+  /** Fires (debounced) with the highlighted result's slug while typing, and null when the search is cleared. */
+  onPreview?: (slug: string | null) => void;
   className?: string;
 }
 
 type RemoteStatus = "idle" | "loading" | "ready" | "error";
 
 /** Search any city, landmark or region on Earth. Curated cities answer instantly; the rest come from the world map. */
-export function PlaceSearch({ variant = "compact", autoFocus, onNavigate, className }: PlaceSearchProps) {
+export function PlaceSearch({ variant = "compact", autoFocus, onNavigate, onPreview, className }: PlaceSearchProps) {
   const router = useRouter();
   const listId = useId();
   const [query, setQuery] = useState("");
@@ -108,6 +110,14 @@ export function PlaceSearch({ variant = "compact", autoFocus, onNavigate, classN
 
   useEffect(() => setActive(0), [options.length, trimmed]);
 
+  // Let the page (e.g. the home hero) follow whichever place is highlighted.
+  const previewSlug = searching ? (options[active]?.slug ?? null) : null;
+  useEffect(() => {
+    if (!onPreview) return;
+    const timer = setTimeout(() => onPreview(previewSlug), previewSlug ? 280 : 0);
+    return () => clearTimeout(timer);
+  }, [previewSlug, onPreview]);
+
   // Close the list when focus or a click lands elsewhere.
   useEffect(() => {
     const onPointer = (event: PointerEvent): void => {
@@ -119,7 +129,13 @@ export function PlaceSearch({ variant = "compact", autoFocus, onNavigate, classN
 
   const go = (slug: string): void => {
     setOpen(false);
-    setQuery("");
+    // The home hero keeps showing the chosen place while the page navigates.
+    if (variant !== "hero") setQuery("");
+    try {
+      localStorage.setItem("avt:last-place", slug);
+    } catch {
+      /* private mode: fine */
+    }
     router.push(`/destination/${slug}`);
     onNavigate?.();
   };

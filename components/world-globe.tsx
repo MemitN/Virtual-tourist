@@ -73,7 +73,7 @@ function Marker({ place, hovered, onHover, onSelect }: MarkerProps) {
       }}
     >
       <sphereGeometry args={[0.022, 12, 12]} />
-      <meshBasicMaterial color={hovered ? "#ffffff" : "#4cc9ff"} toneMapped={false} />
+      <meshBasicMaterial color={hovered ? "#ffffff" : "#ffc247"} toneMapped={false} />
     </mesh>
   );
 }
@@ -109,14 +109,14 @@ export function WorldGlobe({ places, onSelect, className }: WorldGlobeProps) {
         <ambientLight intensity={0.8} />
         <mesh>
           <sphereGeometry args={[1, 64, 48]} />
-          <meshBasicMaterial color="#071236" />
+          <meshBasicMaterial color="#0a2530" />
         </mesh>
         <mesh scale={1.12}>
           <sphereGeometry args={[1, 48, 32]} />
-          <meshBasicMaterial color="#2f6bff" transparent opacity={0.12} side={THREE.BackSide} />
+          <meshBasicMaterial color="#2dd4bf" transparent opacity={0.14} side={THREE.BackSide} />
         </mesh>
         <lineSegments geometry={graticule}>
-          <lineBasicMaterial color="#2f6bff" transparent opacity={0.45} />
+          <lineBasicMaterial color="#2dd4bf" transparent opacity={0.5} />
         </lineSegments>
         {places.map((place) => (
           <Marker

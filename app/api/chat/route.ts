@@ -2,9 +2,10 @@ import type { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { z } from "zod";
-import { checkRateLimit, getAuthedUser, jsonError, readJson } from "@/lib/api-utils";
+import { checkRateLimit, jsonError, readJson } from "@/lib/api-utils";
+import { createClient } from "@/lib/supabase/server";
 import { createDemoStream } from "@/lib/demo-guide";
-import { createChatStream, isMetaConfigured, MissingApiKeyError } from "@/lib/meta-client";
+import { createChatStream, isMetaConfigured, logAiError } from "@/lib/meta-client";
 import { buildGuidePrompt } from "@/lib/prompts";
 import { publishContext } from "@/lib/realtime/publishContext";
 import { chatBodySchema } from "@/lib/schemas";
@@ -85,10 +86,12 @@ export async function POST(request: NextRequest): Promise<Response> {
     return jsonError(400, "Invalid request.", "bad_input", parsed.error.flatten());
   }
 
-  const auth = await getAuthedUser();
-  if (!auth.ok) return auth.response;
+  // Sign-in is optional: signed-in users get saved history, guests chat freely (rate-limited by IP).
+  const supabase = createClient();
+  const user = supabase ? (await supabase.auth.getUser().catch(() => ({ data: { user: null } }))).data.user : null;
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
 
-  const limit = checkRateLimit(`chat:${auth.user.id}`, 20, 60_000);
+  const limit = checkRateLimit(`chat:${user?.id ?? ip}`, 20, 60_000);
   if (!limit.allowed) {
     return jsonError(
       429,
@@ -99,33 +102,30 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
-  const { slug, messages } = parsed.data;
+  const { slug, messages, language } = parsed.data;
   const destination = await resolveDestination(slug);
   if (!destination) return jsonError(400, "Unknown destination.", "bad_input");
 
-  const demoMode = !isMetaConfigured() && process.env.DEMO_MODE === "true";
-  if (!isMetaConfigured() && !demoMode) {
-    return jsonError(
-      500,
-      "The AI guide isn't configured yet. Add MODEL_API_KEY to the server environment.",
-      "missing_api_key",
-    );
-  }
+  // No key configured: fall back to the offline guide instead of an error.
+  const demoMode = !isMetaConfigured();
 
   // RT-4: inject live weather + local time before the model call.
   const liveContext = await getLiveContext(destination);
   void publishContext(slug, liveContext);
 
-  const systemPrompt = buildGuidePrompt(destination, liveContext);
+  const systemPrompt = buildGuidePrompt(destination, liveContext, language ?? "en");
   const lastMessage = messages[messages.length - 1];
-  const sessionPromise = lastMessage
-    ? persistUserMessage(auth.supabase, auth.user.id, slug, lastMessage.content)
-    : Promise.resolve(null);
+  const sessionPromise =
+    lastMessage && supabase && user
+      ? persistUserMessage(supabase, user.id, slug, lastMessage.content)
+      : Promise.resolve(null);
 
+  const lastText = lastMessage?.content ?? "";
   let upstream: ReadableStream<Uint8Array>;
+  let usedFallback = false;
   try {
     upstream = demoMode
-      ? createDemoStream(destination, liveContext, lastMessage?.content ?? "", request.signal)
+      ? createDemoStream(destination, liveContext, lastText, request.signal, "(Offline guide: add MODEL_API_KEY to .env.local for full Meta Muse answers.)")
       : await createChatStream({
           messages: [
             { role: "system", content: systemPrompt },
@@ -134,13 +134,19 @@ export async function POST(request: NextRequest): Promise<Response> {
           signal: request.signal,
         });
   } catch (error) {
-    if (error instanceof MissingApiKeyError) {
-      return jsonError(500, "The AI guide isn't configured yet.", "missing_api_key");
+    if (request.signal.aborted) return new Response(null, { status: 499 });
+    const info = logAiError("chat", error);
+    if (info.status === 429 && process.env.AI_STRICT === "true") {
+      return jsonError(429, info.message, "upstream_error");
     }
-    return jsonError(
-      500,
-      "The guide couldn't be reached right now. Please try again in a moment.",
-      "upstream_error",
+    // Never leave the traveler with an error: answer from local knowledge and say why.
+    usedFallback = true;
+    upstream = createDemoStream(
+      destination,
+      liveContext,
+      lastText,
+      request.signal,
+      `(Offline guide: the Meta AI service didn't respond, so this answer comes from local data. ${info.message})`,
     );
   }
 
@@ -154,8 +160,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     },
     async flush() {
       fullReply += decoder.decode();
-      const sessionId = await sessionPromise;
-      await persistAssistantMessage(auth.supabase, sessionId, fullReply);
+      const sessionId = await Promise.race([
+        sessionPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+      ]);
+      if (supabase) await persistAssistantMessage(supabase, sessionId, fullReply);
     },
   });
 
@@ -165,6 +174,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store, no-transform",
       "X-Accel-Buffering": "no",
+      "X-Guide-Mode": demoMode ? "offline" : usedFallback ? "fallback" : "ai",
     },
   });
 }

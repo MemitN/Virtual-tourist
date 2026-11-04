@@ -87,3 +87,10 @@ export function checkRateLimit(
     retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
   };
 }
+
+/** Postgres / PostgREST codes that mean "table not found": a migration hasn't been applied. */
+export function isMissingTable(error: { code?: string } | null): boolean {
+  return error?.code === "PGRST205" || error?.code === "42P01";
+}
+
+export const MIGRATION_HINT = "Saved trips need the 0002_saved_trips.sql migration. Run it in the Supabase SQL editor.";

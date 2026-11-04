@@ -81,8 +81,15 @@ export function summaryFromSlug(slug: string): DestinationCardData | null {
     slug,
     name,
     country: regionName(parsed.countryCode),
-    tagline: `Explore ${name} with a local AI guide.`,
+    tagline: `Explore ${name} with a local guide.`,
     cardImage: scenicSvg(slug, 800, 1000),
     gradient: scenicGradient(slug),
   };
+}
+
+/** Rough timezone from longitude (15° per hour), used only when the timezone lookup is unreachable. */
+export function timezoneFromLongitude(lng: number): string {
+  const offset = Math.max(-12, Math.min(14, Math.round(lng / 15)));
+  if (offset === 0) return "UTC";
+  return `Etc/GMT${offset > 0 ? "-" : "+"}${Math.abs(offset)}`;
 }

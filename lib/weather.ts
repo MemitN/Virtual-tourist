@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { timezoneFromLongitude } from "@/lib/place-slug";
 import type { Destination, LiveContext } from "@/lib/types";
 
 const openMeteoSchema = z.object({
@@ -97,6 +98,35 @@ export async function getLiveContext(destination: Destination): Promise<LiveCont
   } catch {
     return {
       localTime,
+      weather: "Weather unavailable",
+      temp: 0,
+      conditions: "Unknown",
+    };
+  }
+}
+
+const autoTimezoneSchema = z.object({
+  timezone: z.string(),
+  current: z.object({ temperature_2m: z.number(), weather_code: z.number() }),
+});
+
+/** One request for coordinates alone: Open-Meteo returns the timezone too, so no place lookup is needed. */
+export async function getLiveContextForCoords(lat: number, lng: number): Promise<LiveContext> {
+  try {
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.searchParams.set("latitude", String(lat));
+    url.searchParams.set("longitude", String(lng));
+    url.searchParams.set("current", "temperature_2m,weather_code");
+    url.searchParams.set("timezone", "auto");
+    const response = await fetch(url, { signal: AbortSignal.timeout(4000), next: { revalidate: 60 } });
+    if (!response.ok) throw new Error(`Open-Meteo responded ${response.status}`);
+    const parsed = autoTimezoneSchema.parse(await response.json());
+    const temp = Math.round(parsed.current.temperature_2m);
+    const conditions = describeWeatherCode(parsed.current.weather_code);
+    return { localTime: formatLocalTime(parsed.timezone), weather: `${conditions}, ${temp}°C`, temp, conditions };
+  } catch {
+    return {
+      localTime: formatLocalTime(timezoneFromLongitude(lng)),
       weather: "Weather unavailable",
       temp: 0,
       conditions: "Unknown",

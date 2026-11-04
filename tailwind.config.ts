@@ -50,6 +50,7 @@ const config: Config = {
           foreground: "hsl(var(--destructive-foreground))",
         },
         success: "hsl(var(--success))",
+        ink: "hsl(var(--ink))",
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
@@ -71,7 +72,7 @@ const config: Config = {
       },
       backgroundImage: {
         "sunset-gradient":
-          "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%)",
+          "linear-gradient(120deg, hsl(var(--grad-from)) 0%, hsl(var(--grad-to)) 100%)",
         "hero-fade":
           "linear-gradient(to top, hsl(var(--background)) 0%, hsl(var(--background) / 0.6) 40%, transparent 100%)",
       },
@@ -91,6 +92,11 @@ const config: Config = {
           "0%": { opacity: "0", transform: "translateY(12px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "spin-slow": { to: { transform: "rotate(360deg)" } },
+        drift: {
+          "0%, 100%": { transform: "translate3d(0,0,0) scale(1)" },
+          "50%": { transform: "translate3d(3%,-4%,0) scale(1.08)" },
+        },
         "typing-bounce": {
           "0%, 80%, 100%": { transform: "translateY(0)", opacity: "0.4" },
           "40%": { transform: "translateY(-4px)", opacity: "1" },
@@ -101,6 +107,8 @@ const config: Config = {
         shimmer: "shimmer 1.6s infinite",
         "fade-up": "fade-up 0.5s ease-out both",
         "typing-bounce": "typing-bounce 1.2s infinite ease-in-out",
+        "spin-slow": "spin-slow 90s linear infinite",
+        drift: "drift 18s ease-in-out infinite",
       },
     },
   },

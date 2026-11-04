@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!destination) return { title: "Destination not found" };
   return {
     title: `Chat with ${destination.guide.name}, your ${destination.name} guide`,
-    description: `Chat with an AI local guide for ${destination.name}, powered by Meta's Muse models.`,
+    description: `Chat with a local guide for ${destination.name}, powered by Meta's Muse models.`,
   };
 }
 

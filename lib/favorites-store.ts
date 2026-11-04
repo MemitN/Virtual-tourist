@@ -8,6 +8,26 @@ const listResponseSchema = z.object({ favorites: z.array(favoriteSchema) });
 const createResponseSchema = z.object({ favorite: favoriteSchema });
 
 const PENDING_ID = "pending";
+/** Pseudo user id used when nobody is signed in: favorites live in this browser's localStorage. */
+export const GUEST_ID = "guest";
+const LOCAL_KEY = "vt:favorites";
+
+function readLocal(): string[] {
+  try {
+    const raw: unknown = JSON.parse(window.localStorage.getItem(LOCAL_KEY) ?? "[]");
+    return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocal(slugs: string[]): void {
+  try {
+    window.localStorage.setItem(LOCAL_KEY, JSON.stringify(slugs));
+  } catch {
+    /* storage blocked */
+  }
+}
 
 export type FavoritesStatus = "idle" | "loading" | "ready" | "error";
 export type ToggleResult = "added" | "removed" | "error" | "busy";
@@ -35,6 +55,13 @@ export const useFavoritesStore = create<FavoritesState>()((set, get) => ({
       return;
     }
     set({ userId, status: "loading", ...(current.userId !== userId ? { ids: {}, pending: {} } : {}) });
+
+    if (userId === GUEST_ID) {
+      const ids: Record<string, string> = {};
+      for (const slug of readLocal()) ids[slug] = "local";
+      set({ ids, status: "ready" });
+      return;
+    }
 
     try {
       const response = await fetch("/api/favorites", { cache: "no-store" });
@@ -67,6 +94,16 @@ export const useFavoritesStore = create<FavoritesState>()((set, get) => ({
         else ids[slug] = id;
         return { ids };
       });
+
+    if (get().userId === GUEST_ID) {
+      const slugs = new Set(readLocal());
+      const removing = Boolean(existing);
+      if (removing) slugs.delete(slug);
+      else slugs.add(slug);
+      writeLocal([...slugs]);
+      setId(removing ? null : "local");
+      return removing ? "removed" : "added";
+    }
 
     setPending(true);
 

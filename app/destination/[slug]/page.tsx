@@ -9,15 +9,18 @@ import {
   Languages,
   MapPin,
   MessageCircle,
+  Luggage,
   Play,
   Clock,
 } from "lucide-react";
 import { DestinationCard } from "@/components/destination-card";
+import { ExplainPanel } from "@/components/explain-panel";
 import { FavoriteButton } from "@/components/favorite-button";
 import { GuideAvatar } from "@/components/guide-avatar";
 import { RoomOnlineBadge } from "@/components/room-online-badge";
 import { SafeImage } from "@/components/safe-image";
 import { ShareButton } from "@/components/share-button";
+import { TranslatedText } from "@/components/translated-text";
 import { Button } from "@/components/ui/button";
 import { WeatherCard } from "@/components/weather-card";
 import { DESTINATIONS } from "@/lib/destinations";
@@ -67,8 +70,8 @@ export default async function DestinationPage({ params }: PageProps) {
             sizes="100vw"
             priority
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#050816]/90 via-[#050816]/40 to-transparent" aria-hidden="true" />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-[#050816]/40" aria-hidden="true" />
+          <div className="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/45 to-transparent" aria-hidden="true" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-ink/40" aria-hidden="true" />
         </div>
 
         <div className="relative mx-auto flex min-h-[64dvh] max-w-[1600px] flex-col justify-between gap-8 px-4 py-6 text-white sm:px-6">
@@ -93,8 +96,8 @@ export default async function DestinationPage({ params }: PageProps) {
               {country}
             </p>
             <h1 className="text-5xl font-extrabold leading-none sm:text-7xl">{name}</h1>
-            <p className="text-lg font-medium text-white/90">{tagline}</p>
-            <p className="line-clamp-4 text-sm text-white/75 sm:text-base">{description}</p>
+            <TranslatedText text={tagline} showToggle={false} className="block text-lg font-medium text-white/90" />
+            <TranslatedText text={description} className="block line-clamp-4 text-sm text-white/75 sm:text-base" />
 
             <div className="mt-2 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap">
               <Button asChild size="lg" className="w-full sm:w-auto">
@@ -107,6 +110,12 @@ export default async function DestinationPage({ params }: PageProps) {
                 <Link href={`/destination/${slug}/guide`}>
                   <MessageCircle aria-hidden="true" />
                   Ask the Guide
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="glass" className="w-full sm:w-auto">
+                <Link href={`/destination/${slug}/plan`}>
+                  <Luggage aria-hidden="true" />
+                  Plan Trip
                 </Link>
               </Button>
               <FavoriteButton slug={slug} name={name} variant="full" tone="glass" className="w-full sm:w-auto" />
@@ -139,6 +148,13 @@ export default async function DestinationPage({ params }: PageProps) {
 
         <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
           <div className="space-y-10">
+            <section aria-labelledby="story-heading" className="panel p-5 sm:p-6">
+              <h2 id="story-heading" className="mb-3 text-2xl font-bold">
+                The story of {name}
+              </h2>
+              <ExplainPanel slug={slug} subject={name} guideName={guide.name} />
+            </section>
+
             {pois.length > 0 && (
               <section aria-labelledby="poi-heading">
                 <h2 id="poi-heading" className="mb-3 text-2xl font-bold">

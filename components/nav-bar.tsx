@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Globe2, Heart, LogIn, LogOut, Search } from "lucide-react";
+import { CalendarDays, Heart, LogIn, LogOut, Search } from "lucide-react";
 import { toast } from "sonner";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { LogoMark } from "@/components/logo";
 import { PlaceSearch } from "@/components/place-search";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -52,9 +54,7 @@ export function NavBar() {
     <header className="glass sticky top-0 z-40 border-x-0 border-t-0">
       <nav aria-label="Main" className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-2 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-3 rounded-full py-1 pr-2" aria-label={`${SITE_NAME} home`}>
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-sunset-gradient text-primary-foreground shadow-glow">
-            <Globe2 className="h-5 w-5" aria-hidden="true" />
-          </span>
+          <LogoMark className="h-11 w-11 drop-shadow-[0_0_12px_hsl(var(--primary)/0.55)]" />
           <span className="leading-tight">
             <span className="block font-display text-base font-bold">{SITE_NAME}</span>
             <span className="hidden text-[0.65rem] text-muted-foreground xs:block">
@@ -92,6 +92,8 @@ export function NavBar() {
             <kbd className="hidden rounded border px-1.5 text-[0.65rem] md:inline">Ctrl K</kbd>
           </Button>
 
+          <LanguageSwitcher />
+
           {loading ? (
             <div className="skeleton h-11 w-11 rounded-full" aria-hidden="true" />
           ) : user ? (
@@ -112,6 +114,11 @@ export function NavBar() {
                 <DropdownMenuItem asChild>
                   <Link href="/favorites">
                     <Heart aria-hidden="true" /> Favorites
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/trips">
+                    <CalendarDays aria-hidden="true" /> My trips
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => void handleSignOut()}>

@@ -1,7 +1,7 @@
-export const SITE_NAME = "AI Virtual Tourism";
-export const SITE_TAGLINE = "Real Places. AI Guides. Infinite Experiences.";
+export const SITE_NAME = "Virtual Tourist";
+export const SITE_TAGLINE = "Real places. Local guides. Endless journeys.";
 export const SITE_DESCRIPTION =
-  "Explore any place on Earth with an AI local guide, 360° tours and travelers in shared real-time rooms.";
+  "Explore any place on Earth with a local guide, 360° tours and travelers in shared real-time rooms.";
 
 /** Absolute site origin for sitemap/robots. Set NEXT_PUBLIC_SITE_URL in production; Vercel's URL is the fallback. */
 export function getSiteUrl(): string {

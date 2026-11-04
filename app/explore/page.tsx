@@ -6,7 +6,7 @@ import { FEATURED_PLACES, REGIONS } from "@/lib/featured";
 
 export const metadata: Metadata = {
   title: "Explore the world",
-  description: "Search any city, landmark or country on Earth and meet a local AI guide there.",
+  description: "Search any city, landmark or country on Earth and meet a local guide there.",
 };
 
 export default function ExplorePage() {
@@ -27,7 +27,7 @@ export default function ExplorePage() {
         <h2 id="globe-heading" className="mb-4 text-2xl font-bold">
           Spin the globe
         </h2>
-        <GlobeSection listCount={0} />
+        <GlobeSection />
       </section>
 
       {REGIONS.map((region) => {
